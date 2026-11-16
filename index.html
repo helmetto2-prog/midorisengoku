@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>戦国 ― 全国統一への道 v24 〜時勢で乱世の空気が変わる版〜</title>
+<title>戦国 ― 全国統一への道 v25 〜タイトル画面を作り直した版〜</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -151,7 +151,7 @@ const GENS=[
 // ── 状態 ───────────────────────────────────────────────────
 let state='title', busy=false, G=null, sel=-1, phase='cmd', fromP=-1;
 let helpOpen=false;   // v20: ゲーム中の「あそびかた」オーバーレイ
-const UI={ btns:[], end:null, daimyo:[], cont:null, help:null };
+const UI={ btns:[], end:null, daimyo:[], cont:null, help:null, thelp:null };   // thelp＝v25：タイトルの「あそびかた」ボタン
 let mouse={x:0,y:0};
 
 function newGame(playerFac){
@@ -1213,35 +1213,132 @@ function drawRecStrip(x,y,w){
   if(t){ ctx.textAlign='right'; ctx.fillStyle='#ffd24d'; ctx.font='bold 13px "MS Gothic"'; ctx.fillText('称号『'+t+'』', x+w-10, y+29); }
   ctx.textAlign='left';
 }
+// ── v25：タイトル画面を作り直し（金箔のロゴ・朱の日輪・顔つきの大名カード。あそびかたの早見表は ボタン／H キーで開く面へ）──
+const TT_MIN='"Yu Mincho","Hiragino Mincho ProN","MS Mincho",serif', TT_GOT='"Yu Gothic UI","Hiragino Sans","Meiryo","Segoe UI",sans-serif';
+let titleT0=0, titleLast=-1e9;      // タイトルに戻るたびに、ロゴの登場をやり直すための時計
+function rrT(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath(); }
+// ロゴの字：判を押すように「どん」と入り、そのあとはゆっくり息をする（墨のふち＋白金の線＋金箔のグラデーション＋朱の光）
+function titleLogoS(text,cx,y,size,t){
+  ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.lineJoin='round';
+  ctx.font='900 '+size+'px '+TT_MIN;
+  const chars=[...text], gap=size*0.16, ws=chars.map(ch=>ctx.measureText(ch).width), total=ws.reduce((p,q)=>p+q,0)+gap*(chars.length-1);
+  let x=cx-total/2;
+  chars.forEach((ch,i)=>{
+    const e=clamp((t-0.25-i*0.30)/0.32,0,1), sc=(1+Math.pow(1-e,2)*1.8)*(1+Math.sin(t*1.3+i*1.1)*0.012*e);
+    ctx.save(); ctx.translate(x+ws[i]/2,y); ctx.scale(sc,sc); ctx.globalAlpha=e;
+    ctx.shadowColor='rgba(235,70,30,0.95)'; ctx.shadowBlur=30;
+    ctx.strokeStyle='#120a06'; ctx.lineWidth=size*0.17; ctx.strokeText(ch,0,0);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#fff0c0'; ctx.lineWidth=size*0.065; ctx.strokeText(ch,0,0);
+    const g=ctx.createLinearGradient(0,-size*0.88,0,size*0.10);
+    g.addColorStop(0,'#fff7d6'); g.addColorStop(0.40,'#f4c95a'); g.addColorStop(0.75,'#c98a22'); g.addColorStop(1,'#8a4a12');
+    ctx.fillStyle=g; ctx.fillText(ch,0,0);
+    ctx.restore(); x+=ws[i]+gap; });
+  ctx.restore();
+}
+// 顔の絵がある武将をその家の「顔」にする（無い家は当主＝兜の顔で描かれる）
+function titleFaceGen(f){ const g0=GENS[f].find(g=>PIMG[g[0]]); return {name:(g0||GENS[f][0])[0], isLord:true}; }
+// 記録の丸い札（v22 の記録帯と同じ中身を、小さな札にして並べる）
+function drawRecPills(cx,y){
+  ctx.save(); ctx.font='bold 13px '+TT_GOT; ctx.textBaseline='alphabetic';
+  const row=(items,yy)=>{ const ws=items.map(s=>ctx.measureText(s.t).width+24+(s.dots?DAIMYO.length*15+6:0)), total=ws.reduce((p,q)=>p+q,0)+8*(items.length-1);
+    const k=Math.min(1,(W-40)/total); ctx.save(); ctx.translate(cx,yy); ctx.scale(k,k); let x=-total/2;
+    items.forEach((s,i)=>{ rrT(x,0,ws[i],24,12); ctx.fillStyle='rgba(16,10,8,0.84)'; ctx.fill();
+      ctx.strokeStyle=s.gold?'rgba(255,210,77,0.85)':'rgba(214,170,90,0.50)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.textAlign='left'; ctx.fillStyle=s.col||'#e8d6a8'; ctx.fillText(s.t, x+12, 17);
+      if(s.dots){ const dx=x+12+ctx.measureText(s.t).width+12;
+        DAIMYO.forEach((d,f)=>{ const on=REC.done.indexOf(f)>=0; ctx.beginPath(); ctx.arc(dx+f*15,12,5,0,TAU);
+          ctx.fillStyle=on?d.col:'rgba(255,255,255,0.09)'; ctx.fill(); ctx.strokeStyle=on?'#ffe9a8':'#4a4438'; ctx.lineWidth=1; ctx.stroke(); }); }
+      x+=ws[i]+8; });
+    ctx.restore(); };
+  if(!REC.plays){ row([{t:'― 天下統一の記録 ―  まだ誰も天下を獲っていない。最初の一家を選び、記録を刻め',col:'#a89c84'}], y+14); ctx.restore(); return; }
+  const a=[{t:'⚔ 出陣 '+REC.plays+'回'},{t:'👑 天下統一 '+REC.wins+'回'}];
+  if(REC.bestYear) a.push({t:'🏆 最速 '+REC.bestYear+'年（'+DAIMYO[REC.bestFac].n+'家・'+(REC.bestYear-1560)+'年で統一）',gold:true,col:'#ffd98a'});
+  a.push({t:'🗾 最大 '+REC.maxProv+'カ国'});
+  const b=[{t:'制覇した家 '+REC.done.length+'/'+DAIMYO.length,dots:true,col:'#ffd27a'}], tt=recTitle();
+  if(tt) b.push({t:'称号『'+tt+'』',gold:true,col:'#ffd24d'});
+  row(a,y); row(b,y+29);
+  ctx.restore();
+}
 function renderTitle(){
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1a1410'); g.addColorStop(1,'#0a0c14'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  ctx.textAlign='center'; ctx.fillStyle='#ffd98a'; ctx.font='bold 40px "MS Gothic"'; ctx.fillText('戦 国', W/2, 74);
-  ctx.fillStyle='#caa'; ctx.font='15px "MS Gothic"'; ctx.fillText('― 全国統一への道 ―  信長の野望風 戦国シミュレーション v22', W/2, 102);
-  ctx.fillStyle='#9fb0c8'; ctx.font='13px "MS Gothic"'; ctx.fillText('好きな大名を選び、内政で富み、出陣で切り取り、他の14家を滅ぼして天下を統一せよ。', W/2, 126);
-  UI.daimyo=[]; const cols=4,bw=170,bh=46,gap=12,x0=(W-(cols*bw+(cols-1)*gap))/2,y0=146;
+  const now=clock(); if(now-titleLast>400) titleT0=now; titleLast=now;
+  const t=(now-titleT0)/1000, cx=W/2;
+  // 下地：墨の夜に、金雲と朱の日輪
+  { const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1c120c'); g.addColorStop(0.5,'#120e12'); g.addColorStop(1,'#07080e'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
+  { const g=ctx.createRadialGradient(cx,100,20,cx,100,430); g.addColorStop(0,'rgba(210,120,40,0.30)'); g.addColorStop(0.5,'rgba(120,50,20,0.12)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,330); }
+  ctx.save();
+  [[-40,26,330,16],[60,48,250,12],[780,22,300,16],[730,46,240,12],[-20,168,210,10],[850,172,220,10]].forEach((c,i)=>{   // 金雲（ゆっくり流れる）
+    const dx=Math.sin(t*0.25+i*1.3)*14, g=ctx.createLinearGradient(c[0],0,c[0]+c[2],0);
+    g.addColorStop(0,'rgba(232,190,90,0)'); g.addColorStop(0.5,'rgba(232,190,90,0.26)'); g.addColorStop(1,'rgba(232,190,90,0)');
+    rrT(c[0]+dx,c[1],c[2],c[3],c[3]/2); ctx.fillStyle=g; ctx.fill(); });
+  { const p=0.5+0.5*Math.sin(t*1.1), g=ctx.createRadialGradient(cx,92,10,cx,92,92);      // 朱の日輪
+    g.addColorStop(0,'#f0553a'); g.addColorStop(0.8,'#b3241a'); g.addColorStop(1,'#8a160f');
+    ctx.shadowColor='rgba(240,80,40,'+(0.5+0.3*p).toFixed(2)+')'; ctx.shadowBlur=30+14*p;
+    ctx.globalAlpha=clamp(t/0.5,0,1)*0.92; ctx.beginPath(); ctx.arc(cx,92,88,0,TAU); ctx.fillStyle=g; ctx.fill(); }
+  ctx.restore();
+  // 名だたる大名の顔（ゲームの顔の絵を左右にならべる）
+  [[9,222],[11,322],[13,718],[4,818]].forEach((v,i)=>{ const e=clamp((t-0.5-i*0.12)/0.4,0,1); if(e<=0) return;
+    ctx.save(); ctx.globalAlpha=e; ctx.shadowColor='rgba(0,0,0,0.7)'; ctx.shadowBlur=12;
+    drawGenFace(v[1], 96+(1-e)*18+Math.sin(t*1.4+i)*2, 2.3, titleFaceGen(v[0]), DAIMYO[v[0]].col); ctx.restore(); });
+  // 英字の小見出し
+  ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.font='bold 12px "Segoe UI",sans-serif'; ctx.fillStyle='rgba(240,214,150,0.90)';
+  { const s='SENGOKU', step=16; [...s].forEach((ch,i)=>ctx.fillText(ch, cx-(s.length-1)*step/2+i*step, 198)); }
+  ctx.strokeStyle='rgba(240,214,150,0.45)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx-190,194); ctx.lineTo(cx-66,194); ctx.moveTo(cx+66,194); ctx.lineTo(cx+190,194); ctx.stroke();
+  ctx.restore();
+  // ロゴと副題・ひとこと
+  titleLogoS('戦国', cx, 132, 112, t);
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.lineJoin='round';
+  ctx.font='900 22px '+TT_MIN; ctx.strokeStyle='rgba(18,10,6,0.9)'; ctx.lineWidth=5; ctx.strokeText('― 全国統一への道 ―', cx, 174);
+  ctx.fillStyle='#ffe2a0'; ctx.fillText('― 全国統一への道 ―', cx, 174);
+  ctx.font='14px '+TT_GOT; ctx.fillStyle='rgba(214,204,186,0.92)';
+  ctx.fillText('好きな大名を選び、内政で富み、出陣で切り取り、他の14家を滅ぼして天下を統一せよ。', cx, 222);
+  // 大名のカード（5列×3段・顔つき。カーソルや指を乗せた家が光る。押すと今までどおりその家で開始）
+  UI.daimyo=[]; const cols=5,bw=192,bh=64,gap=8,x0=(W-(cols*bw+(cols-1)*gap))/2,y0=236;
   let hov=-1;
   DAIMYO.forEach((d,f)=>{ const bx=x0+(f%cols)*(bw+gap), by=y0+Math.floor(f/cols)*(bh+gap);
-    const on=(mouse.x>=bx&&mouse.x<=bx+bw&&mouse.y>=by&&mouse.y<=by+bh); if(on) hov=f;
+    const on=!helpOpen&&(mouse.x>=bx&&mouse.x<=bx+bw&&mouse.y>=by&&mouse.y<=by+bh); if(on) hov=f;
     const inf=START_INFO[f]||[2,''];
-    ctx.fillStyle=on?'#2a2438':'#1e1a28'; ctx.fillRect(bx,by,bw,bh); ctx.strokeStyle=d.col; ctx.lineWidth=on?3:2; ctx.strokeRect(bx+1,by+1,bw-2,bh-2);
-    ctx.fillStyle=d.col; ctx.beginPath(); ctx.arc(bx+22,by+bh/2,10,0,TAU); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='bold 15px "MS Gothic"'; ctx.textAlign='left'; ctx.fillText(d.n+'家', bx+40, by+22);
-    ctx.fillStyle='#9a8f7a'; ctx.font='10px "MS Gothic"'; ctx.fillText('本拠 '+PROV[d.start[0]].n+' / '+d.start.length+'カ国', bx+40, by+38);
-    ctx.fillStyle=DIFF_COL[inf[0]]; ctx.font='11px "MS Gothic"'; ctx.textAlign='right';
-    ctx.fillText('★'.repeat(inf[0])+'☆'.repeat(3-inf[0]), bx+bw-8, by+19);
-    if(inf[0]===1){ ctx.fillStyle='#8dff6b'; ctx.font='9px "MS Gothic"'; ctx.fillText('入門向き', bx+bw-8, by+36); }
-    ctx.textAlign='left';
+    ctx.save();
+    if(on){ ctx.shadowColor=d.col; ctx.shadowBlur=16+6*Math.sin(t*5); }
+    { const g=ctx.createLinearGradient(0,by,0,by+bh); g.addColorStop(0,on?'#4a3420':'#261c18'); g.addColorStop(1,on?'#21160e':'#120e10');
+      rrT(bx,by,bw,bh,10); ctx.fillStyle=g; ctx.fill(); }
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=on?'#ffe9a8':d.col; ctx.lineWidth=on?2.5:1.5; ctx.globalAlpha=on?1:0.85; rrT(bx+0.5,by+0.5,bw-1,bh-1,10); ctx.stroke(); ctx.globalAlpha=1;
+    drawGenFace(bx+30, by+bh/2+2, 1.55, titleFaceGen(f), d.col);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle=on?'#ffe9a8':'#fff5dc'; ctx.font='900 21px '+TT_MIN; ctx.fillText(d.n+'家', bx+60, by+25, bw-68);
+    ctx.fillStyle='#b5a88c'; ctx.font='12px '+TT_GOT; ctx.fillText('本拠 '+PROV[d.start[0]].n+' / '+d.start.length+'カ国', bx+60, by+42, bw-68);
+    ctx.fillStyle=DIFF_COL[inf[0]]; ctx.font='13px '+TT_GOT;
+    ctx.fillText('★'.repeat(inf[0])+'☆'.repeat(3-inf[0]), bx+60, by+58);
+    if(inf[0]===1){ ctx.fillStyle='#8dff6b'; ctx.font='bold 11px '+TT_GOT; ctx.fillText('入門向き', bx+108, by+58); }
+    ctx.restore();
     UI.daimyo.push({x:bx,y:by,w:bw,h:bh,f}); });
   // 選択中の大名の難易度と一言（初見が「どこを選べばよいか」で迷わないように）
-  ctx.textAlign='center'; ctx.font='13px "MS Gothic"';
+  ctx.textAlign='center'; ctx.font='bold 15px '+TT_GOT;
   if(hov>=0){ const inf=START_INFO[hov]||[2,''];
-    ctx.fillStyle=DIFF_COL[inf[0]]; ctx.fillText('【'+DAIMYO[hov].n+'家】難易度 '+DIFF_LABEL[inf[0]]+' ― '+inf[1], W/2, 380); }
-  else { ctx.fillStyle='#8a8578'; ctx.fillText('★の少ない家ほどやさしい。初めてなら 島津・毛利・北条・伊達 がおすすめ', W/2, 380); }
-  drawHelpPanel(58, 392, W-116, '▼ あそびかた（ゲーム中も ❓遊び方 ／ H キーでいつでも読める）');
-  drawRecStrip(58, 547, W-116);   // v22: 天下統一の記録帯
-  if(hasSave()){ const x=W/2-90,y=H-58,w=180,h=28; ctx.fillStyle='#2a3a28'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#5a8a50'; ctx.lineWidth=1.5; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1);
-    ctx.fillStyle='#cfe3a0'; ctx.font='14px "MS Gothic"'; ctx.textAlign='center'; ctx.fillText('つづきから', x+w/2, y+19); UI.cont={x,y,w,h}; } else UI.cont=null;
-  ctx.fillStyle='#998'; ctx.font='12px "MS Gothic"'; ctx.textAlign='center'; ctx.fillText('▶ 大名をクリックで開始', W/2, H-16);
+    ctx.fillStyle=DIFF_COL[inf[0]]; ctx.fillText('【'+DAIMYO[hov].n+'家】難易度 '+DIFF_LABEL[inf[0]]+' ― '+inf[1], cx, 470); }
+  else { ctx.fillStyle='#a89c84'; ctx.fillText('★の少ない家ほどやさしい。初めてなら 島津・毛利・北条・伊達 がおすすめ', cx, 470); }
+  // つづきから／あそびかた のボタン
+  { const hs=hasSave(), bwid=230, bh2=40, y=484, gap2=16, tot=hs?bwid*2+gap2:bwid; let x=cx-tot/2;
+    const btn=(label,colA,colB,line,txt)=>{ const r={x,y,w:bwid,h:bh2}, on=!helpOpen&&hit(r,mouse.x,mouse.y);
+      ctx.save(); if(on){ ctx.shadowColor=line; ctx.shadowBlur=14; }
+      const g=ctx.createLinearGradient(0,y,0,y+bh2); g.addColorStop(0,colA); g.addColorStop(1,colB);
+      rrT(x,y,bwid,bh2,12); ctx.fillStyle=g; ctx.fill(); ctx.shadowBlur=0;
+      ctx.strokeStyle=line; ctx.lineWidth=on?2.5:1.5; ctx.stroke();
+      ctx.fillStyle=txt; ctx.font='900 18px '+TT_GOT; ctx.textAlign='center'; ctx.fillText(label, x+bwid/2, y+26); ctx.restore();
+      x+=bwid+gap2; return r; };
+    UI.cont = hs ? btn('▶ つづきから','#3a5230','#1e2e1a','#8fc47a','#e4f6c8') : null;
+    UI.thelp = btn('❓ あそびかた（H）','#3a2c1a','#1c140c','#d6aa5a','#ffe2a0'); }
+  // 記録の丸い札
+  drawRecPills(cx, 538);
+  // 始め方（小さく）
+  ctx.textAlign='center';
+  ctx.fillStyle='rgba(255,217,138,'+(0.70+0.30*Math.sin(t*3.2)).toFixed(2)+')'; ctx.font='bold 14px '+TT_GOT; ctx.fillText('▶ 大名をクリックで開始', cx, 612);
+  ctx.fillStyle='#7d7466'; ctx.font='11px '+TT_GOT; ctx.fillText('信長の野望風 戦国シミュレーション v25　／　M 音　R 最初から', cx, 630);
 }
 function drawEnvoy(){ const e=G.envoy, t=clock()-e.t0;
   ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
@@ -1355,7 +1452,7 @@ const FX={
 };
 function render(){
   ctx.fillStyle='#0a0c14'; ctx.fillRect(0,0,W,H);
-  if(state==='title'){ renderTitle(); return; }
+  if(state==='title'){ renderTitle(); if(helpOpen) drawHelpOverlay(); return; }   // v25：タイトル画面を作り直し＝早見表はタイトルでも同じ面で開く
   drawMap(); if(G.march) drawMarch(); drawStatus(); drawPanel(); drawLog();
   if(state==='play') drawGenTip();
   if(G.aiBanner) drawAiBanner();
@@ -1411,6 +1508,9 @@ C.addEventListener('pointermove',e=>{ const b=C.getBoundingClientRect(); mouse.x
 C.addEventListener('click',async e=>{
   SFX.ensure(); const b=C.getBoundingClientRect(); const mx=(e.clientX-b.left)*(W/b.width), my=(e.clientY-b.top)*(H/b.height);
   if(state==='title'){
+    // v25：タイトル画面を作り直し＝あそびかたを開いている間はクリックで閉じる／「❓ あそびかた」ボタンで開く
+    if(helpOpen){ helpOpen=false; SFX.sel(); Music.play('tenka',{vol:0.4}); return; }
+    if(UI.thelp&&hit(UI.thelp,mx,my)){ helpOpen=true; SFX.sel(); Music.play('tenka',{vol:0.4}); return; }
     for(const d of UI.daimyo) if(hit(d,mx,my)){ newGame(d.f); state='play'; SFX.startBGM(); SFX.cmd(); Music.play('heisei'); return; }
     if(UI.cont&&hit(UI.cont,mx,my)){ if(load()){ SFX.startBGM(); Music.play('heisei'); } return; }
     Music.play('tenka',{vol:0.4}); return;   // v17: タイトル画面BGM（天下統一テーマ。初回クリックで再生開始）
@@ -1447,7 +1547,7 @@ C.addEventListener('click',async e=>{
   }
 });
 document.addEventListener('keydown',e=>{ SFX.ensure();
-  if(e.code==='KeyH'&&state!=='title'){ helpOpen=!helpOpen; SFX.sel(); return; }    // v20: あそびかたの開閉
+  if(e.code==='KeyH'){ helpOpen=!helpOpen; SFX.sel(); if(state==='title') Music.play('tenka',{vol:0.4}); return; }    // v20: あそびかたの開閉（v25：タイトル画面を作り直し＝タイトルでも H で開く）
   if(helpOpen&&(e.code==='Space'||e.code==='Enter'||e.code==='Escape')){ helpOpen=false; return; }
   if(e.code==='Space'&&G&&G.action){ e.preventDefault(); actionInput(); return; }   // 合戦アクション
   if(e.code==='KeyM') SFX.toggle();
